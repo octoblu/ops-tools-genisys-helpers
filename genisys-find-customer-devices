@@ -36,25 +36,6 @@ script_directory(){
   echo "$dir"
 }
 
-assert_customer_json() {
-  local meshblu_json_path="$1"
-  local device_uuid
-  device_uuid="$(jq --raw-output '.uuid' "$meshblu_json_path")"
-  local exit_code=$?
-  if [ "$exit_code" != "0" ]; then
-    exit $exit_code
-  fi
-
-  local device_type="$(get_device_type "$meshblu_json_path" "$device_uuid")"
-
-  if [ "$device_type" != "octoblu:smartspaces:customer" ]; then
-    usage
-
-    echo "meshblu.json must be a customer, however, I detected that it was a '$device_type'"
-    exit 1
-  fi
-}
-
 assert_required_params() {
   local meshblu_json_path="$1"
 
@@ -112,16 +93,19 @@ version(){
 find_device() {
   local name="$1"
   local genisys_device_name="$2"
-  local meshblu_json_path="$3"
+  local meshblu_json_path="./customer/meshblu.json"
 
+  echo -n "| Updating $name... "
   local device_uuid="$(find_device_uuid "$genisys_device_name" "$meshblu_json_path")"
   if [ -z "$device_uuid" ]; then
-    echo "Failed to resolve $name"
+    echo "failed."
     return 1
   fi
 
   mkdir -p "$name" \
-  && meshblu-util generate-token --uuid "$device_uuid" "$meshblu_json_path" > "$name/meshblu.json"
+  && meshblu-util generate-token --uuid "$device_uuid" "$meshblu_json_path" > "$name/meshblu.json" \
+  && echo "done." \
+  || echo "failed."
 }
 
 find_device_uuid() {
@@ -134,8 +118,6 @@ find_device_uuid() {
 
 main() {
   # Define args up here
-  local meshblu_json_path
-
   while [ "$1" != "" ]; do
     local param="$1"
     local value="$2"
@@ -154,33 +136,25 @@ main() {
           usage
           exit 1
         fi
-        # Set main arguments
-        if [ -z "$meshblu_json_path" ]; then
-          meshblu_json_path="$param"
-        # elif [ -z "$room_uuid"]; then
-        #   room_uuid="$param"
-        fi
         ;;
     esac
     shift
   done
 
-  assert_required_params "$meshblu_json_path"
-  assert_customer_json "$meshblu_json_path"
+  if [ ! -f "./customer/meshblu.json" ]; then
+    panic "Error: ./customer/meshblu.json not found"
+  fi
 
-  echo -n "Finding group devices... "
-  find_device "slurry-exchange-group" "slurryExchangeGroup" "$meshblu_json_path" \
-  && find_device "hue-button-group" "hueButtonGroup" "$meshblu_json_path" \
-  && find_device "room-group" "roomGroup" "$meshblu_json_path" \
-  && find_device "meeting-group" "meetingGroup" "$meshblu_json_path" \
-  && find_device "skype-group" "skypeGroup" "$meshblu_json_path" \
-  && find_device "user-group" "userGroup" "$meshblu_json_path" \
-  && find_device "endo-genisys-meeting-group" "meetingGroupEndoMeeting" "$meshblu_json_path" \
-  && find_device "room-group-status" "roomGroupStatus" "$meshblu_json_path" \
-  && echo "done."
-  || echo "failed."
-
-  exit $?
+  echo "Finding customer devices... "
+  find_device "slurry-exchange-group" "slurryExchangeGroup"
+  find_device "hue-button-group" "hueButtonGroup"
+  find_device "room-group" "roomGroup"
+  find_device "meeting-group" "meetingGroup"
+  find_device "skype-group" "skypeGroup"
+  find_device "user-group" "userGroup"
+  find_device "endo-genisys-meetings" "meetingGroupEndoMeeting"
+  find_device "room-group-status" "roomGroupStatus"
+  echo "done."
 }
 
 main "$@"
