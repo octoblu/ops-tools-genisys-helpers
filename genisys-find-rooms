@@ -128,7 +128,7 @@ find_rooms() {
   IFS=$'\n' read -rd '' -a rooms <<<"$rooms_response"
 
   for room in "${rooms[@]}"; do
-    write_room_meshblu_json "$customer_json_path" "$rooms_path" "$room" || return $?
+    write_room_meshblu_json "$customer_json_path" "$rooms_path" "$room"
   done
 }
 
@@ -142,7 +142,7 @@ parse_room_folder_name() {
 }
 
 write_room_meshblu_json() {
-  local customer_json_path rooms_path room room_folder_name room_uuid
+  local customer_json_path rooms_path room room_folder_name room_uuid status
 
   customer_json_path="$1"
   rooms_path="$2"
@@ -153,14 +153,22 @@ write_room_meshblu_json() {
 
   mkdir -p "$rooms_path/$room_folder_name" || return $?
 
-  #if [ -f "$rooms_path/$room_folder_name/meshblu.json" ]; then
-  #  return 0
-  #fi
+  if [ -f "$rooms_path/$room_folder_name/meshblu.json" ]; then
+   return 0
+  fi
 
+  echo -n "Finding room $room_folder_name... "
   meshblu-util generate-token \
     --uuid "$room_uuid" \
     "$customer_json_path" \
   > "$rooms_path/$room_folder_name/meshblu.json"
+  status=$?
+  if [ "$status" == "0" ]; then
+    echo "done."
+  else
+    echo "failed."
+    return $status
+  fi
 }
 
 
