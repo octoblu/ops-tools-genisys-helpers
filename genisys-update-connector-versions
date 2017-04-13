@@ -107,6 +107,12 @@ main() {
     shift
   done
 
+  genisys-find-rooms
+
+  if [ "$meshblu_root" == "" ]; then
+    meshblu_root='./rooms'
+  fi
+
   upgrade_path $meshblu_root
   exit $?
 }
