@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_NAME='genisys-bootstrap-customer'
+SCRIPT_NAME='genisys-bootstrap-rooms'
 
 matches_debug() {
   if [ -z "$DEBUG" ]; then
@@ -36,16 +36,16 @@ script_directory(){
 }
 
 assert_required_params() {
-  local subdomain="$1"
+  local example_arg="$1"
 
-  if [ -n "$subdomain" ]; then
+  if [ -n "$example_arg" ]; then
     return 0
   fi
 
   usage
 
-  if [ -z "$subdomain" ]; then
-    echo "Missing subdomain argument"
+  if [ -z "$example_arg" ]; then
+    echo "Missing example_arg argument"
   fi
 
   exit 1
@@ -75,14 +75,7 @@ version(){
   fi
 }
 
-panic(){
-  local message="$1"
-  echo "$message"
-  exit 1
-}
-
 main() {
-  local subdomain
   # Define args up here
   while [ "$1" != "" ]; do
     local param="$1"
@@ -96,61 +89,33 @@ main() {
         version
         exit 0
         ;;
-      -s | --subdomain)
-        subdomain="$value"
-        shift
-        ;;
+      # Arg with value
+      # -x | --example)
+      #   example="$value"
+      #   shift
+      #   ;;
+      # Arg without value
+      # -e | --example-flag)
+      #   example_flag='true'
+      #   ;;
       *)
         if [ "${param::1}" == '-' ]; then
           echo "ERROR: unknown parameter \"$param\""
           usage
           exit 1
         fi
+        # Set main arguments
+        # if [ -z "$main_arg" ]; then
+        #   main_arg="$param"
+        # elif [ -z "$main_arg_2"]; then
+        #   main_arg_2="$param"
+        # fi
         ;;
     esac
     shift
   done
 
-  assert_required_params "$subdomain"
-
-  if [ "$subdomain" == "dev" ]; then
-    configurationUrl="https://raw.githubusercontent.com/octoblu/smartspaces-bootstrap-configuration/master/development.json"
-  else
-    configurationUrl="https://raw.githubusercontent.com/octoblu/smartspaces-bootstrap-configuration/master/semi-stable.json"
-  fi
-
-  if [ ! -f "./super-user/meshblu.json" ]; then
-    panic "Error: ./super-user/meshblu.json not found"
-  fi
-
-  if [ ! -f "./customer/meshblu.json" ]; then
-    panic "Error: ./customer/meshblu.json not found"
-  fi
-
-  local superUserUuid="$(jq -r '.uuid' ./super-user/meshblu.json)"
-  local superUserToken="$(jq -r '.token' ./super-user/meshblu.json)"
-  local customerUuid="$(jq -r '.uuid' ./customer/meshblu.json)"
-
-  if [ "$superUserUuid" == "" ]; then
-    panic "Error: super-user uuid not found"
-  fi
-
-  if [ "$superUserToken" == "" ]; then
-    panic "Error: super-user token not found"
-  fi
-
-  if [ "$customerUuid" == "" ]; then
-    panic "Error: customer uuid not found"
-  fi
-
-  echo -n "Updating customer... "
-  curl --fail \
-    -H 'Content-Type: application/json' \
-    -X PATCH "https://$superUserUuid:$superUserToken@factory-service.$subdomain.octo.space/v2/customers/$customerUuid" \
-    -d "{\"configurationUrl\": \"$configurationUrl\"}" \
-  || panic "failed." \
-  && echo "done.
-
+  # assert_required_params "$example_arg"
 }
 
 main "$@"
