@@ -1,0 +1,7 @@
+#!/bin/sh
+
+for room in rooms/*; do
+  echo $room
+  curl --fail -v -H 'Content-Type: application/json' -X PATCH https://$(jq -r '.uuid' ./customer/meshblu.json):$(jq -r '.token' ./customer/meshblu.json)@factory-service.dev.octo.space/v2/spaces/$(jq -r '.uuid' ./$room/meshblu.json) \
+  && curl --fail -v -H 'Content-Type: application/json' -X PATCH https://$(jq -r '.uuid' ./customer/meshblu.json):$(jq -r '.token' ./customer/meshblu.json)@factory-service.dev.octo.space/v2/spaces/exchange -d "{\"roomId\": \"$(jq -r '.uuid' ./$room/meshblu.json)\"}"
+done

@@ -1,0 +1,3 @@
+#!/bin/sh
+
+curl -v -H 'Content-Type: application/json' -X PATCH https://$(jq -r '.uuid' ./super-user/meshblu.json):$(jq -r '.token' ./super-user/meshblu.json)@factory-service.dev.octo.space/v2/customers/$(jq -r '.uuid' ./customer/meshblu.json) -d '{"configurationUrl": "https://raw.githubusercontent.com/octoblu/smartspaces-bootstrap-configuration/master/development.json"}'

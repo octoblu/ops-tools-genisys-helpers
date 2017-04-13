@@ -1,0 +1,214 @@
+#!/bin/bash
+
+SCRIPT_NAME='find-rooms'
+
+matches_debug() {
+  if [ -z "$DEBUG" ]; then
+    return 1
+  fi
+  if [[ $SCRIPT_NAME == "$DEBUG" ]]; then
+    return 0
+  fi
+  return 1
+}
+
+debug() {
+  local cyan='\033[0;36m'
+  local no_color='\033[0;0m'
+  local message="$@"
+  matches_debug || return 0
+  (>&2 echo -e "[${cyan}${SCRIPT_NAME}${no_color}]: $message")
+}
+
+script_directory(){
+  local source="${BASH_SOURCE[0]}"
+  local dir=""
+
+  while [ -h "$source" ]; do # resolve $source until the file is no longer a symlink
+    dir="$( cd -P "$( dirname "$source" )" && pwd )"
+    source="$(readlink "$source")"
+    [[ $source != /* ]] && source="$dir/$source" # if $source was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+  done
+
+  dir="$( cd -P "$( dirname "$source" )" && pwd )"
+
+  echo "$dir"
+}
+
+assert_required_params() {
+  local customer_json_path="$1"
+  local rooms_path="$1"
+
+  if [ -n "$customer_json_path" ] && [ -n "$rooms_path" ] && [ -f "$customer_json_path" ]; then
+    return 0
+  fi
+
+  usage
+
+  if [ -z "$customer_json_path" ]; then
+    echo "Missing <customer-json-path> argument"
+  elif [ ! -f "$customer_json_path" ]; then
+    echo "<customer-json-path> does not resolve to a file"
+  fi
+
+  if [ -z "$rooms_path" ]; then
+    echo "Missing <rooms-path> argument"
+  fi
+
+  exit 1
+}
+
+usage(){
+  echo "USAGE: ${SCRIPT_NAME} </path/to/customer/meshblu.json> </path/to/rooms>"
+  echo ''
+  echo 'Description: ...'
+  echo ''
+  echo 'Arguments:'
+  echo '  -h, --help       print this help text'
+  echo '  -v, --version    print the version'
+  echo ''
+  echo 'Environment:'
+  echo '  DEBUG            print debug output'
+  echo ''
+}
+
+version(){
+  local directory
+  directory="$(script_directory)"
+
+  if [ -f "$directory/VERSION" ]; then
+    cat "$directory/VERSION"
+  else
+    echo "unknown-version"
+  fi
+}
+
+
+dasherize() {
+  # https://github.com/PetroFeed/dockerized-jenkins/blob/master/jenkins/bin/dasherize
+
+  echo "$@" \
+  | tr '[:upper:]' '[:lower:]' \
+  | awk '{gsub("^[^a-z0-9]|[^a-z0-9]$", ""); print}' \
+  | awk '{gsub("[^a-z0-9]", "-"); print}' \
+  | tr -s '-'
+}
+
+fetch_rooms() {
+  local customer_uuid customer_token
+
+  customer_uuid="$1"
+  customer_token="$2"
+
+  curl "https://$customer_uuid:$customer_token@factory-service.dev.octo.space/v2/spaces" \
+  --silent \
+  --fail
+}
+
+get_rooms() {
+  local customer_json_path customer_uuid customer_token response
+  customer_json_path="$1"
+
+  customer_uuid="$(jq --raw-output '.uuid' "$customer_json_path")" || return $?
+  customer_token="$(jq --raw-output '.token' "$customer_json_path")" || return $?
+
+  response="$(fetch_rooms "$customer_uuid" "$customer_token")" || return $?
+
+  echo -n "$response" | jq --compact-output --raw-output '.[]'
+}
+
+find_rooms() {
+  local customer_json_path rooms_path rooms rooms_response
+
+  customer_json_path="$1"
+  rooms_path="$2"
+
+  rooms_response="$(get_rooms "$customer_json_path")" || return $?
+
+  IFS=$'\n' read -rd '' -a rooms <<<"$rooms_response"
+
+  for room in "${rooms[@]}"; do
+    write_room_meshblu_json "$customer_json_path" "$rooms_path" "$room" || return $?
+  done
+}
+
+parse_room_folder_name() {
+  local room name
+
+  room="$1"
+  name="$(echo -n "$room" | jq --raw-output '.name')"
+
+  dasherize "$name"
+}
+
+write_room_meshblu_json() {
+  local customer_json_path rooms_path room room_folder_name room_uuid
+
+  customer_json_path="$1"
+  rooms_path="$2"
+  room="$3"
+
+  room_folder_name="$(parse_room_folder_name "$room")"
+  room_uuid="$(echo -n "$room" | jq --raw-output '.uuid')" || return $?
+
+  mkdir -p "$rooms_path/$room_folder_name" || return $?
+
+  #if [ -f "$rooms_path/$room_folder_name/meshblu.json" ]; then
+  #  return 0
+  #fi
+
+  meshblu-util generate-token \
+    --uuid "$room_uuid" \
+    "$customer_json_path" \
+  > "$rooms_path/$room_folder_name/meshblu.json"
+}
+
+
+main() {
+  # Define args up here
+  local customer_json_path rooms_path
+
+  while [ "$1" != "" ]; do
+    local param="$1"
+    # local value="$2"
+    case "$param" in
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      -v | --version)
+        version
+        exit 0
+        ;;
+      # Arg with value
+      # -x | --example)
+      #   example="$value"
+      #   shift
+      #   ;;
+      # Arg without value
+      # -e | --example-flag)
+      #   example_flag='true'
+      #   ;;
+      *)
+        if [ "${param::1}" == '-' ]; then
+          echo "ERROR: unknown parameter \"$param\""
+          usage
+          exit 1
+        fi
+        # Set main arguments
+        if [ -z "$customer_json_path" ]; then
+          customer_json_path="$param"
+        elif [ -z "$rooms_path" ]; then
+          rooms_path="$param"
+        fi
+        ;;
+    esac
+    shift
+  done
+
+  assert_required_params "$customer_json_path" "$rooms_path"
+
+  find_rooms "$customer_json_path" "$rooms_path"
+}
+
+main "$@"
