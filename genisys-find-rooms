@@ -206,6 +206,14 @@ main() {
     shift
   done
 
+  if [ "$customer_json_path" == "" ]; then
+    customer_json_path="./customer/meshblu.json"
+  fi
+
+  if [ "$rooms_path" == "" ]; then
+    rooms_path="./rooms"
+  fi
+
   assert_required_params "$customer_json_path" "$rooms_path"
 
   find_rooms "$customer_json_path" "$rooms_path"
