@@ -201,7 +201,7 @@ find_device() {
   && room_uuid="$(get_room_uuid "$room_json_path")" \
   && device_uuid="$(find_device_uuid "$customer_json_path" "$room_uuid" "$device_key")" \
   && mkdir -p "$room_path/$folder_name" \
-  && meshblu-util generate-token --uuid "$device_uuid" "$customer_json_path" > "$room_path/$folder_name/meshblu.json"
+  && meshblu-util generate-token --uuid "$device_uuid" "$customer_json_path" > "$room_path/$folder_name/meshblu.json" 2>/dev/null
 }
 
 find_device_uuid() {

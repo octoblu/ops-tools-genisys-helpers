@@ -151,18 +151,22 @@ write_room_meshblu_json() {
   room_folder_name="$(parse_room_folder_name "$room")"
   room_uuid="$(echo -n "$room" | jq --raw-output '.uuid')" || return $?
 
-  mkdir -p "$rooms_path/$room_folder_name" || return $?
-
-  if [ -f "$rooms_path/$room_folder_name/meshblu.json" ]; then
-   return 0
-  fi
-
   echo -n "Finding room $room_folder_name... "
-  meshblu-util generate-token \
-    --uuid "$room_uuid" \
-    "$customer_json_path" \
-  > "$rooms_path/$room_folder_name/meshblu.json"
+
+  mkdir -p "$rooms_path/$room_folder_name"
   status=$?
+
+  if [ ! -f "$rooms_path/$room_folder_name/meshblu.json" ]; then
+    meshblu-util generate-token \
+      --uuid "$room_uuid" \
+      "$customer_json_path" \
+    > "$rooms_path/$room_folder_name/meshblu.json"
+    status=$?
+  fi
+  pushd "$rooms_path/$room_folder_name"
+  genisys-find-room-devices ./meshblu.json
+  popd
+
   if [ "$status" == "0" ]; then
     echo "done."
   else
