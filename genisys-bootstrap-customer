@@ -57,6 +57,7 @@ usage(){
   echo 'Description: ...'
   echo ''
   echo 'Arguments:'
+  echo '  -s, --subdomain  subdomain to use'
   echo '  -h, --help       print this help text'
   echo '  -v, --version    print the version'
   echo ''
@@ -149,7 +150,7 @@ main() {
     -X PATCH "https://$superUserUuid:$superUserToken@factory-service.$subdomain.octo.space/v2/customers/$customerUuid" \
     -d "{\"configurationUrl\": \"$configurationUrl\"}" \
   || panic "failed." \
-  && echo "done.
+  && echo "done."
 
 }
 
