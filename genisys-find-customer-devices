@@ -152,6 +152,7 @@ main() {
   find_device "meeting-group" "meetingGroup"
   find_device "skype-group" "skypeGroup"
   find_device "user-group" "userGroup"
+  find_device "user-group-recruiter" "userGroupRecruiter"
   find_device "endo-genisys-meetings" "meetingGroupEndoMeeting"
   find_device "room-group-status" "roomGroupStatus"
   echo "done."
