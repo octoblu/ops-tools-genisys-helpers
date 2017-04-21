@@ -268,6 +268,7 @@ main() {
   local failed_devices=()
 
   find_device "$customer_json_path" "$room_json_path" "endoExchange" "endo-exchange" || failed_devices+=("endo-exchange")
+  find_device "$customer_json_path" "$room_json_path" "slurryExchange" "slurry-exchange" || failed_devices+=("slurry-exchange")
   find_device "$customer_json_path" "$room_json_path" "hueButton" "hue-button" || failed_devices+=("hue-button")
   find_device "$customer_json_path" "$room_json_path" "hueLight" "hue-light" || failed_devices+=("hue-light")
   find_device "$customer_json_path" "$room_json_path" "powermate" "powermate" || failed_devices+=("powermate")
