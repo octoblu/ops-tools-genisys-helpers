@@ -128,8 +128,8 @@ main() {
     panic "Error: ./customer/meshblu.json not found"
   fi
 
-  local superUserUuid="$(jq -r '.uuid' ./super-user/meshblu.json)"
-  local superUserToken="$(jq -r '.token' ./super-user/meshblu.json)"
+  local superUserUuid="$(jq -r '.uuid' ../../super-user/meshblu.json)"
+  local superUserToken="$(jq -r '.token' ../../super-user/meshblu.json)"
   local customerUuid="$(jq -r '.uuid' ./customer/meshblu.json)"
 
   if [ "$superUserUuid" == "" ]; then
