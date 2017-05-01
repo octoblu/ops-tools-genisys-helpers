@@ -1,0 +1,1 @@
+for room in (ls */slurry-exchange/meshblu.json); meshblu-util update -d '{"meshblu.updatedAt": "'(wtd -i -u)'"}' "$room"; and meshblu-util message -d '{"devices": ["*"], "topic": "bump"}' "$room"; end
