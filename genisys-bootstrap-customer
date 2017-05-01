@@ -120,8 +120,8 @@ main() {
     configurationUrl="https://raw.githubusercontent.com/octoblu/smartspaces-bootstrap-configuration/master/semi-stable.json"
   fi
 
-  if [ ! -f "./super-user/meshblu.json" ]; then
-    panic "Error: ./super-user/meshblu.json not found"
+  if [ ! -f "../../super-user/meshblu.json" ]; then
+    panic "Error: ../../super-user/meshblu.json not found"
   fi
 
   if [ ! -f "./customer/meshblu.json" ]; then
