@@ -41,7 +41,7 @@ assert_is_customer() {
   local meshblu_json_path device device_type
   meshblu_json_path="$1"
 
-  device="$(meshblu-util get)" || fatal "Could not retrieve device described at </path/to/customer/meshblu.json>"
+  device="$(meshblu-util get "$meshblu_json_path")" || fatal "Could not retrieve device described at </path/to/customer/meshblu.json>"
   device_type="$(echo "$device" | jq --raw-output '.type')" || fatal "Could not parse device JSON returned from meshblu"
 
   if [ "$device_type" != "octoblu:smartspaces:customer" ]; then
