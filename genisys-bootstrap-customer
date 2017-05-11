@@ -67,7 +67,8 @@ usage(){
 }
 
 version(){
-  local directory="$(script_directory)"
+  local directory
+  directory="$(script_directory)"
 
   if [ -f "$directory/VERSION" ]; then
     cat "$directory/VERSION"
@@ -83,7 +84,8 @@ panic(){
 }
 
 main() {
-  local subdomain
+  local subdomain superUserUuid superUserToken customerUuid
+
   # Define args up here
   while [ "$1" != "" ]; do
     local param="$1"
@@ -128,9 +130,9 @@ main() {
     panic "Error: ./customer/meshblu.json not found"
   fi
 
-  local superUserUuid="$(jq -r '.uuid' ../../super-user/meshblu.json)"
-  local superUserToken="$(jq -r '.token' ../../super-user/meshblu.json)"
-  local customerUuid="$(jq -r '.uuid' ./customer/meshblu.json)"
+  superUserUuid="$(jq -r '.uuid' ../../super-user/meshblu.json)"
+  superUserToken="$(jq -r '.token' ../../super-user/meshblu.json)"
+  customerUuid="$(jq -r '.uuid' ./customer/meshblu.json)"
 
   if [ "$superUserUuid" == "" ]; then
     panic "Error: super-user uuid not found"
