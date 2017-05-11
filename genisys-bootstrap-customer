@@ -35,30 +35,61 @@ script_directory(){
   echo "$dir"
 }
 
+assert_device_type() {
+  local meshblu_json_path device device_type required_device_type
+  meshblu_json_path="$1"
+  required_device_type="$2"
+
+  device="$(meshblu-util get "$meshblu_json_path")" || fatal "Could not retrieve device described at </path/to/customer/meshblu.json>"
+  device_type="$(echo "$device" | jq --raw-output '.type')" || fatal "Could not parse device JSON returned from meshblu"
+
+  if [ "$device_type" != "$required_device_type" ]; then
+    err_echo "Device described at '$meshblu_json_path' must be '$required_device_type', received: '$device_type'"
+    exit 1
+  fi
+}
+
 assert_required_params() {
   local subdomain="$1"
+  local customer_meshblu_json_path="$2"
+  local super_user_meshblu_json_path="$3"
 
-  if [ -n "$subdomain" ]; then
+  if [ -n "$subdomain" ] \
+     && [ -n "$customer_meshblu_json_path" ] && [ -f "$customer_meshblu_json_path" ] \
+     && [ -n "$super_user_meshblu_json_path" ] && [ -f "$super_user_meshblu_json_path" ]; then
     return 0
   fi
 
   usage
 
+
   if [ -z "$subdomain" ]; then
-    echo "Missing subdomain argument"
+    echo "Missing -s, --subdomain argument"
+  fi
+
+  if [ -z "$customer_meshblu_json_path" ]; then
+    echo "Missing </path/to/customer/meshblu.json> argument"
+  elif [ ! -f "$customer_meshblu_json_path" ]; then
+    echo "it seems like '$customer_meshblu_json_path' might not be a file..."
+  fi
+
+  if [ ! -f "$super_user_meshblu_json_path" ]; then
+    echo "it seems like '$super_user_meshblu_json_path' might not be a file..."
   fi
 
   exit 1
 }
 
 usage(){
-  echo "USAGE: ${SCRIPT_NAME}"
+  echo "USAGE: ${SCRIPT_NAME} </path/to/customer/meshblu.json>"
   echo ''
-  echo 'Description: ...'
+  echo 'Description: Will bootstrap the customer. Assumes that the'
+  echo '             super-user meshblu.json is located at:'
+  echo '             /path/to/customer/../../../super-user/meshblu.json'
   echo ''
   echo 'Arguments:'
-  echo '  -s, --subdomain  subdomain to use'
   echo '  -h, --help       print this help text'
+  echo '  -s, --subdomain  subdomain to use'
   echo '  -v, --version    print the version'
   echo ''
   echo 'Environment:'
@@ -77,14 +108,61 @@ version(){
   fi
 }
 
-panic(){
+err_echo(){
   local message="$1"
-  echo "$message"
-  exit 1
+  echo "$message" 1>&2
+}
+
+bootstrap_customer(){
+  local customer_meshblu_json_path subdomain super_user_meshblu_json_path
+  local configuration_url customer_uuid super_user_token super_user_uuid
+
+  super_user_meshblu_json_path="$1"
+  customer_meshblu_json_path="$2"
+  subdomain="$3"
+
+  configuration_url="$(get_configuration_url "$subdomain")"
+
+  customer_uuid="$(jq --raw-output '.uuid' "$customer_meshblu_json_path")" || return $?
+  super_user_uuid="$(jq --raw-output '.uuid' "$super_user_meshblu_json_path")" || return $?
+  super_user_token="$(jq --raw-output '.token' "$super_user_meshblu_json_path")" || return $?
+
+  if [ "$customer_uuid" == "" ]; then
+    err_echo "Error: customer uuid not found"
+    return 1
+  fi
+
+  if [ "$super_user_uuid" == "" ]; then
+    err_echo "Error: super-user uuid not found"
+    return 1
+  fi
+
+  if [ "$super_user_token" == "" ]; then
+    err_echo "Error: super-user token not found"
+    return 1
+  fi
+
+  curl \
+    --fail \
+    -X PATCH \
+    --header 'Content-Type: application/json' \
+    --data "{\"configurationUrl\": \"$configuration_url\"}" \
+    "https://$super_user_uuid:$super_user_token@factory-service.$subdomain.octo.space/v2/customers/$customer_uuid"
+}
+
+get_configuration_url(){
+  local subdomain="$1"
+
+  if [ "$subdomain" == "dev" ]; then
+    echo -n "https://raw.githubusercontent.com/octoblu/smartspaces-bootstrap-configuration/master/development.json"
+    return 0
+  fi
+
+  echo -n "https://raw.githubusercontent.com/octoblu/smartspaces-bootstrap-configuration/master/semi-stable.json"
 }
 
 main() {
-  local subdomain superUserUuid superUserToken customerUuid
+  local subdomain customer_meshblu_json_path
 
   # Define args up here
   while [ "$1" != "" ]; do
@@ -109,51 +187,23 @@ main() {
           usage
           exit 1
         fi
+        # Set main arguments
+        if [ -z "$customer_meshblu_json_path" ]; then
+          customer_meshblu_json_path="$param"
+        # elif [ -z "$main_arg_2"]; then
+        #   main_arg_2="$param"
+        fi
         ;;
     esac
     shift
   done
 
-  assert_required_params "$subdomain"
+  super_user_meshblu_json_path="$(dirname "$customer_meshblu_json_path")/../../../super-user/meshblu.json"
+  assert_required_params "$subdomain" "$customer_meshblu_json_path" "$super_user_meshblu_json_path"
+  assert_device_type "$customer_meshblu_json_path" "octoblu:smartspaces:customer"
+  assert_device_type "$super_user_meshblu_json_path" "octoblu:smartspaces:super-user"
 
-  if [ "$subdomain" == "dev" ]; then
-    configurationUrl="https://raw.githubusercontent.com/octoblu/smartspaces-bootstrap-configuration/master/development.json"
-  else
-    configurationUrl="https://raw.githubusercontent.com/octoblu/smartspaces-bootstrap-configuration/master/semi-stable.json"
-  fi
-
-  if [ ! -f "../../super-user/meshblu.json" ]; then
-    panic "Error: ../../super-user/meshblu.json not found"
-  fi
-
-  if [ ! -f "./customer/meshblu.json" ]; then
-    panic "Error: ./customer/meshblu.json not found"
-  fi
-
-  superUserUuid="$(jq -r '.uuid' ../../super-user/meshblu.json)"
-  superUserToken="$(jq -r '.token' ../../super-user/meshblu.json)"
-  customerUuid="$(jq -r '.uuid' ./customer/meshblu.json)"
-
-  if [ "$superUserUuid" == "" ]; then
-    panic "Error: super-user uuid not found"
-  fi
-
-  if [ "$superUserToken" == "" ]; then
-    panic "Error: super-user token not found"
-  fi
-
-  if [ "$customerUuid" == "" ]; then
-    panic "Error: customer uuid not found"
-  fi
-
-  echo -n "Updating customer... "
-  curl --fail \
-    -H 'Content-Type: application/json' \
-    -X PATCH "https://$superUserUuid:$superUserToken@factory-service.$subdomain.octo.space/v2/customers/$customerUuid" \
-    -d "{\"configurationUrl\": \"$configurationUrl\"}" \
-  || panic "failed." \
-  && echo "done."
-
+  bootstrap_customer "$super_user_meshblu_json_path" "$customer_meshblu_json_path" "$subdomain"
 }
 
 main "$@"
