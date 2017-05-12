@@ -40,7 +40,7 @@ assert_device_type() {
   meshblu_json_path="$1"
   required_device_type="$2"
 
-  device="$(meshblu-util get "$meshblu_json_path")" || fatal "Could not retrieve device described at </path/to/customer/meshblu.json>"
+  device="$(meshblu-util get "$meshblu_json_path")" || fatal "Could not retrieve device described at '$meshblu_json_path'"
   device_type="$(echo "$device" | jq --raw-output '.type')" || fatal "Could not parse device JSON returned from meshblu"
 
   if [ "$device_type" != "$required_device_type" ]; then
