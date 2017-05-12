@@ -126,6 +126,11 @@ create_monitor() {
     --data "{\"meshblu.whitelists.configure.update\":[{\"uuid\":\"$customer_uuid\"}]}" \
     "$monitor_meshblu_json_path"
 
+  # Update with customer in discover.view whitelist
+  meshblu-util update \
+    --data "{\"meshblu.whitelists.discover.view\":[{\"uuid\":\"$customer_uuid\"}]}" \
+    "$monitor_meshblu_json_path"
+
   monitor_uuid="$(jq --join-output '.uuid' "$monitor_meshblu_json_path")"
 
   # Update room with interactionMonitor
@@ -175,7 +180,7 @@ create_subscription(){
   meshblu-util update \
     --uuid "$device_uuid" \
     --put \
-    --data "{\"\$addToSet\": {\"meshblu.whitelists.$subscription_type\": {\"uuid\":\"$monitor_uuid\"}}}" \
+    --data "{\"\$addToSet\": {\"meshblu.whitelists.$subscription_type\": {\"uuid\":\"$monitor_uuid\"}, \"discoverWhitelist\": \"$monitor_uuid\"}}" \
     "$meshblu_json_path"
 
   meshblu-util subscription-create \
@@ -204,18 +209,33 @@ create_subscriptions(){
   create_subscription "$meshblu_json_path" "$monitor_uuid" "$device_uuid" "broadcast.sent"
   create_subscription "$meshblu_json_path" "$monitor_uuid" "$device_uuid" "configure.sent"
   create_subscription "$meshblu_json_path" "$monitor_uuid" "$device_uuid" "message.sent"
+
+  status_device_uuid="$(meshblu-util get --uuid "$device_uuid" "$meshblu_json_path" | jq --join-output '.statusDevice')"
+  if [ "$status_device_uuid" == "null" ]; then
+    return 0
+  fi
+
+  echo "Updating status device $status_device_uuid"
+
+  meshblu-util update \
+    --uuid "$status_device_uuid" \
+    --put \
+    --data "{\"\$addToSet\": {\"meshblu.whitelists.discover.view\": {\"uuid\":\"$monitor_uuid\"}}}" \
+    "$meshblu_json_path"
 }
 
 upsert_monitor(){
-  local customer_meshblu_json_path room_meshblu_json_path room_uuid
+  local customer_meshblu_json_path customer_uuid room_meshblu_json_path room_uuid
   customer_meshblu_json_path="$1"
   room_meshblu_json_path="$2"
 
+  customer_uuid="$(jq --join-output '.uuid' "$customer_meshblu_json_path")"
   room_uuid="$(jq --join-output '.uuid' "$room_meshblu_json_path")"
 
   monitor_uuid="$(find_or_create_monitor "$customer_meshblu_json_path" "$room_meshblu_json_path" "$room_uuid")"
   room_devices=( $(get_room_devices "$customer_meshblu_json_path" "$room_uuid") )
 
+  create_subscriptions "$customer_meshblu_json_path" "$monitor_uuid" "$customer_uuid"
   create_subscriptions "$customer_meshblu_json_path" "$monitor_uuid" "$room_uuid"
   for room_device in "${room_devices[@]}"; do
     create_subscriptions "$customer_meshblu_json_path" "$monitor_uuid" "$room_device"
