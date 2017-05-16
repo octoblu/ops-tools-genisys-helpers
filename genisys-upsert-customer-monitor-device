@@ -117,6 +117,11 @@ create_monitor() {
     --data "{\"meshblu.whitelists.configure.update\":[{\"uuid\":\"$customer_uuid\"}]}" \
     "$monitor_meshblu_json_path"
 
+  # Update with customer in discover.view whitelist
+  meshblu-util update \
+    --data "{\"meshblu.whitelists.discover.view\":[{\"uuid\":\"$customer_uuid\"}]}" \
+    "$monitor_meshblu_json_path"
+
   monitor_uuid="$(jq --join-output '.uuid' "$monitor_meshblu_json_path")"
 
   # Update customer with interactionMonitor
@@ -162,7 +167,7 @@ create_subscription(){
   meshblu-util update \
     --uuid "$device_uuid" \
     --put \
-    --data "{\"\$addToSet\": {\"meshblu.whitelists.$subscription_type\": {\"uuid\":\"$monitor_uuid\"}}}" \
+    --data "{\"\$addToSet\": {\"meshblu.whitelists.$subscription_type\": {\"uuid\":\"$monitor_uuid\"}, \"meshblu.whitelists.discover.view\": {\"uuid\":\"$monitor_uuid\"}}}" \
     "$meshblu_json_path"
 
   meshblu-util subscription-create \
