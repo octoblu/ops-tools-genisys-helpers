@@ -1,6 +1,7 @@
 #!/bin/bash
 
 SCRIPT_NAME='genisys-create-customer'
+DEFAULT_CONFIGURATION_URL='https://raw.githubusercontent.com/octoblu/smartspaces-bootstrap-configuration/master/semi-stable.json'
 
 matches_debug() {
   if [ -z "$DEBUG" ]; then
@@ -18,6 +19,11 @@ debug() {
   local message="$@"
   matches_debug || return 0
   (>&2 echo -e "[${cyan}${SCRIPT_NAME}${no_color}]: $message")
+}
+
+err_echo() {
+  local message="$1"
+  echo "$message" 1>&2
 }
 
 script_directory(){
@@ -45,31 +51,31 @@ assert_required_params() {
     return 0
   fi
 
-  usage
+  usage 1>&2
 
   if [ -z "$configuration_url" ]; then
-    echo "Missing -c, --configuration-url argument"
+    err_echo "Missing -c, --configuration-url argument"
   fi
 
   if [ -z "$domain" ]; then
-    echo "Missing -d, --domain argument"
+    err_echo "Missing -d, --domain argument"
   fi
 
   if [ -z "$name" ]; then
-    echo "Missing -n, --name argument"
+    err_echo "Missing -n, --name argument"
   fi
 
   if [ -z "$meshblu_json_path" ]; then
-    echo "Missing </path/to/meshblu.json> argument"
+    err_echo "Missing </path/to/meshblu.json> argument"
   elif [ -z "$meshblu_json_path" ]; then
-    echo "</path/to/meshblu.json> doesn't seem to be a file"
+    err_echo "</path/to/meshblu.json> doesn't seem to be a file"
   fi
 
   exit 1
 }
 
 usage(){
-  echo "USAGE: ${SCRIPT_NAME} </path/to/super-user/meshblu.json>"
+  echo "USAGE: ${SCRIPT_NAME} [OPTIONS] </path/to/super-user/meshblu.json>"
   echo ''
   echo 'DESCRIPTION: Will register a new customer with the genisys-factory service'
   echo '             and outputs the resulting meshblu.json as stdout'
@@ -78,8 +84,9 @@ usage(){
   echo "  ${SCRIPT_NAME} ./super-user/meshblu.json > customers/ctxs/customer/meshblu.json"
   echo ''
   echo ''
-  echo 'ARGUMENTS:'
-  echo '  -c, --configuration-url  Configuration URL that contains the rulesets (ex: "https://raw.githubusercontent.com/octoblu/smartspaces-bootstrap-configuration/master/semi-stable.json")'
+  echo 'OPTIONS:'
+  echo '  -c, --configuration-url  Configuration URL that contains the rulesets'
+  echo "                           (default: \"$DEFAULT_CONFIGURATION_URL\")"
   echo '  -d, --domain             Domain where the customer services will run (ex: "cbn.octo.space")'
   echo '  -h, --help               Print this help text'
   echo '  -n, --name               Human readable name (ex: "Cyberdyne Systems")'
@@ -106,19 +113,20 @@ create_customer(){
   local domain="$2"
   local name="$3"
   local uuid="$4"
-  local token="$4"
+  local token="$5"
 
   curl \
+    --user "$uuid:$token" \
     --data "{\"name\": \"$name\", \"domain\": \"$domain\", \"configurationUrl\": \"$configuration_url\"}" \
     --header 'Content-Type: application/json' \
-    --verbose \
     --fail \
     -X POST \
-    "https://$uuid:$token@factory-service.thinclient.octo.space/v2/customers"
+    "https://factory-service.ctxs.octo.space/v2/customers"
 }
 
 main() {
   local configuration_url domain meshblu_json_path name
+  configuration_url="$DEFAULT_CONFIGURATION_URL"
 
   # Define args up here
   while [ "$1" != "" ]; do
