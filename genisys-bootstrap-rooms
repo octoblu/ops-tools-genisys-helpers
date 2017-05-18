@@ -6,7 +6,7 @@ matches_debug() {
   if [ -z "$DEBUG" ]; then
     return 1
   fi
-  if [[ $SCRIPT_NAME == $DEBUG ]]; then
+  if [[ $SCRIPT_NAME == "$DEBUG" ]]; then
     return 0
   fi
   return 1
@@ -66,7 +66,8 @@ usage(){
 }
 
 version(){
-  local directory="$(script_directory)"
+  local directory
+  directory="$(script_directory)"
 
   if [ -f "$directory/VERSION" ]; then
     cat "$directory/VERSION"
@@ -82,7 +83,7 @@ panic(){
 }
 
 main() {
-  local subdomain
+  local subdomain customerUuid customerToken roomUuid
   # Define args up here
   while [ "$1" != "" ]; do
     local param="$1"
@@ -117,8 +118,8 @@ main() {
     panic "Error: ./customer/meshblu.json not found"
   fi
 
-  local customerUuid="$(jq -r '.uuid' ./customer/meshblu.json)"
-  local customerToken="$(jq -r '.token' ./customer/meshblu.json)"
+  customerUuid="$(jq -r '.uuid' ./customer/meshblu.json)"
+  customerToken="$(jq -r '.token' ./customer/meshblu.json)"
 
   if [ "$customerUuid" == "" ]; then
     panic "Error: customer uuid not found"
@@ -132,7 +133,7 @@ main() {
 
   for room in rooms/*; do
     echo -n "Updating $room... "
-    local roomUuid="$(jq -r '.uuid' ./$room/meshblu.json)"
+    roomUuid="$(jq -r '.uuid' ./$room/meshblu.json)"
 
     if [ "$roomUuid" == "" ]; then
       panic "Error: room uuid not found"

@@ -4,6 +4,8 @@ set -o pipefail
 SCRIPT_NAME='update-connector-versions'
 TMP_JSON="/tmp/$(date +%s)-$(( ( RANDOM % 999999999 )  + 1 )).json"
 
+# We are deliberatly locking the filename down now
+# shellcheck disable=SC2064
 trap "rm -f $TMP_JSON; exit" INT TERM EXIT
 
 usage(){
@@ -36,17 +38,19 @@ find_repo() {
 
 find_latest_version() {
   #/releases/:owner/:repo/:version/version/resolve
-  local meshblu_json_path="$1"
-  local repo=$(find_repo "$meshblu_json_path")
-  local uuid=$(find_uuid "$meshblu_json_path")
-  local token=$(find_token "$meshblu_json_path")
+  local meshblu_json_path repo uuid token
+  meshblu_json_path="$1"
+  repo=$(find_repo "$meshblu_json_path")
+  uuid=$(find_uuid "$meshblu_json_path")
+  token=$(find_token "$meshblu_json_path")
   curl -s https://$uuid:$token@connector-service.octoblu.com/releases/octoblu/$repo/latest/version/resolve | jq -r '.version' | sed -e 's|^v||'
 }
 
 update_latest_version() {
-  local meshblu_json_path="$1"
-  local version=$(find_latest_version "$meshblu_json_path")
-  local current=$(meshblu-util get "$meshblu_json_path" >$TMP_JSON; jq -r '.connectorMetadata.currentVersion' <$TMP_JSON | sed -e 's|^v||')
+  local current meshblu_json_path version
+  meshblu_json_path="$1"
+  version=$(find_latest_version "$meshblu_json_path")
+  current=$(meshblu-util get "$meshblu_json_path" >$TMP_JSON; jq -r '.connectorMetadata.currentVersion' <$TMP_JSON | sed -e 's|^v||')
   if [ "$current" != "$version" ]; then
     echo "updating $meshblu_json_path from $current to $version"
     meshblu-util update -p -d '{"$set": {"connectorMetadata.version": "'$version'"}}' "$meshblu_json_path"
@@ -70,9 +74,14 @@ assert_required_params() {
 }
 
 upgrade_path() {
-  local meshblu_root="$1"
-  for meshblu_json_path in $(find "$meshblu_root" -iname meshblu.json); do
-    local connector=$(meshblu-util get "$meshblu_json_path" >$TMP_JSON 2>/dev/null; jq -r '.connector' <$TMP_JSON)
+  local meshblu_json_paths meshblu_root
+  meshblu_root="$1"
+
+  meshblu_json_paths=( $(find "$meshblu_root" -iname meshblu.json) )
+  for meshblu_json_path in "${meshblu_json_paths[@]}"; do
+    local connector
+    connector="$(meshblu-util get "$meshblu_json_path" >$TMP_JSON 2>/dev/null; jq -r '.connector' <$TMP_JSON)"
+
     if [[ -n "$connector" ]] && [[ "$connector" != "null" ]]; then
       assert_required_params "$meshblu_json_path"
       update_latest_version "$meshblu_json_path"
@@ -86,7 +95,7 @@ main() {
 
   while [ "$1" != "" ]; do
     local param="$1"
-    local value="$2"
+    # local value="$2"
     case "$param" in
       -h | --help)
         usage
