@@ -41,6 +41,29 @@ script_directory(){
   echo "$dir"
 }
 
+assert_required_env() {
+  if [ -n "$GENISYS_ATHENA_ADMIN_USERNAME" ] && [ -n "$GENISYS_ATHENA_ADMIN_PASSWORD" ]; then
+    return 0
+  fi
+
+  usage 1>&2
+
+  err_echo ""
+  if [ -z "$GENISYS_ATHENA_ADMIN_USERNAME" ]; then
+    err_echo "missing required env GENISYS_ATHENA_ADMIN_USERNAME"
+  fi
+
+  if [ -z "$GENISYS_ATHENA_ADMIN_PASSWORD" ]; then
+    err_echo "missing required env GENISYS_ATHENA_ADMIN_PASSWORD"
+  fi
+
+  err_echo ""
+  err_echo "** when-in-doubt update dotfiles **"
+  err_echo ""
+
+  exit 1
+}
+
 assert_required_params() {
   local configuration_url="$1"
   local domain="$2"
@@ -74,6 +97,31 @@ assert_required_params() {
   exit 1
 }
 
+assert_required_auth_params() {
+  local auth_type="$1"
+  local tenate_id="$2"
+  case "$auth_type" in
+    citrix)
+      debug "using auth-type citrix"
+      ;;
+    azure)
+      debug "using auth-type azure"
+      if [ -z "$tenate_id" ]; then
+        usage 1>&2
+        err_echo "auth-type of azure must include a tenate-id"
+        exit 1
+      fi
+      ;;
+    other)
+      debug "using auth-type other"
+      ;;
+    *)
+      usage 1>&2
+      err_echo 'auth-type must be one of "citrix", "azure", "other"'
+      exit 1
+  esac
+}
+
 usage(){
   echo "USAGE: ${SCRIPT_NAME} [OPTIONS] </path/to/super-user/meshblu.json>"
   echo ''
@@ -88,12 +136,16 @@ usage(){
   echo '  -c, --configuration-url  Configuration URL that contains the rulesets'
   echo "                           (default: \"$DEFAULT_CONFIGURATION_URL\")"
   echo '  -d, --domain             Domain where the customer services will run (ex: "cbn.octo.space")'
+  echo '  -a, --auth-type          Type of authentication to use (must be one of "citrix", "azure", "none")'
+  echo '  -t, --tenate-id          Tenate ID for Azure AD (required for authentication type of "azure")'
   echo '  -h, --help               Print this help text'
   echo '  -n, --name               Human readable name (ex: "Cyberdyne Systems")'
   echo '  -v, --version            Print the version'
   echo ''
   echo 'ENVIRONMENT:'
-  echo '  DEBUG            print debug output'
+  echo '  GENISYS_ATHENA_ADMIN_USERNAME   (required) Athena Auth Service Admin Username'
+  echo '  GENISYS_ATHENA_ADMIN_PASSWORD   (required) Athena Auth Service Admin Password'
+  echo '  DEBUG                           print debug output'
   echo ''
 }
 
@@ -124,8 +176,35 @@ create_customer(){
     "https://factory-service.ctxs.octo.space/v2/customers"
 }
 
+create_athena_customer() {
+  local auth_type="$1"
+  local tenate_id="$2"
+  local domain="$3"
+  local name="$4"
+  case "$auth_type" in
+    citrix)
+      curl \
+        --user "$GENISYS_ATHENA_ADMIN_USERNAME:$GENISYS_ATHENA_ADMIN_PASSWORD" \
+        --data "{\"name\": \"$name\", \"domain\": \"$domain\"}" \
+        --header 'Content-Type: application/json' \
+        --fail \
+        -X POST \
+        "https://athena.smart.octo.space/customers/citrix"
+      ;;
+    azure)
+      curl \
+        --user "$GENISYS_ATHENA_ADMIN_USERNAME:$GENISYS_ATHENA_ADMIN_PASSWORD" \
+        --data "{\"name\": \"$name\", \"domain\": \"$domain\", \"tenantId\": \"$tenate_id\"}" \
+        --header 'Content-Type: application/json' \
+        --fail \
+        -X POST \
+        "https://athena.smart.octo.space/customers/azure"
+      ;;
+  esac
+}
+
 main() {
-  local configuration_url domain meshblu_json_path name
+  local configuration_url domain meshblu_json_path name auth_type tenate_id
   configuration_url="$DEFAULT_CONFIGURATION_URL"
 
   # Define args up here
@@ -141,6 +220,14 @@ main() {
         domain="$value"
         shift
         ;;
+      -a | --auth-type)
+        auth_type="$value"
+        shift
+        ;;
+      -t | --tenate-id)
+        tenate_id="$value"
+        shift
+        ;;
       -h | --help)
         usage
         exit 0
@@ -153,38 +240,30 @@ main() {
         version
         exit 0
         ;;
-      # Arg with value
-      # -x | --example)
-      #   example="$value"
-      #   shift
-      #   ;;
-      # Arg without value
-      # -e | --example-flag)
-      #   example_flag='true'
-      #   ;;
       *)
         if [ "${param::1}" == '-' ]; then
           echo "ERROR: unknown parameter \"$param\""
           usage
           exit 1
         fi
-        # Set main arguments
         if [ -z "$meshblu_json_path" ]; then
           meshblu_json_path="$param"
-        # elif [ -z "$main_arg_2"]; then
-        #   main_arg_2="$param"
         fi
         ;;
     esac
     shift
   done
 
+  assert_required_env
   assert_required_params "$configuration_url" "$domain" "$name" "$meshblu_json_path"
+  assert_required_auth_params "$auth_type" "$tenate_id"
+
 
   uuid="$(jq --raw-output '.uuid' "$meshblu_json_path")"
   token="$(jq --raw-output '.token' "$meshblu_json_path")"
 
   create_customer "$configuration_url" "$domain" "$name" "$uuid" "$token"
+  create_athena_customer "$auth_type" "$tenate_id" "$domain" "$name"
 }
 
 main "$@"
