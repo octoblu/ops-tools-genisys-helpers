@@ -71,16 +71,21 @@ assert_required_params() {
 usage(){
   echo "USAGE: ${SCRIPT_NAME} </path/to/super-user/meshblu.json>"
   echo ''
-  echo 'Description: ...'
+  echo 'DESCRIPTION: Will register a new customer with the genisys-factory service'
+  echo '             and outputs the resulting meshblu.json as stdout'
   echo ''
-  echo 'Arguments:'
+  echo 'EXAMPLE:'
+  echo "  ${SCRIPT_NAME} ./super-user/meshblu.json > customers/ctxs/customer/meshblu.json"
+  echo ''
+  echo ''
+  echo 'ARGUMENTS:'
   echo '  -c, --configuration-url  Configuration URL that contains the rulesets (ex: "https://raw.githubusercontent.com/octoblu/smartspaces-bootstrap-configuration/master/semi-stable.json")'
   echo '  -d, --domain             Domain where the customer services will run (ex: "cbn.octo.space")'
   echo '  -h, --help               Print this help text'
   echo '  -n, --name               Human readable name (ex: "Cyberdyne Systems")'
   echo '  -v, --version            Print the version'
   echo ''
-  echo 'Environment:'
+  echo 'ENVIRONMENT:'
   echo '  DEBUG            print debug output'
   echo ''
 }
@@ -110,7 +115,6 @@ create_customer(){
     --fail \
     -X POST \
     "https://$uuid:$token@factory-service.thinclient.octo.space/v2/customers"
-
 }
 
 main() {
