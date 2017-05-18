@@ -1,13 +1,13 @@
 #!/bin/bash
 
 set -o pipefail
-SCRIPT_NAME='find-group-devices'
+SCRIPT_NAME='genisys-find-group-devices'
 
 matches_debug() {
   if [ -z "$DEBUG" ]; then
     return 1
   fi
-  if [[ $SCRIPT_NAME == $DEBUG ]]; then
+  if [[ $SCRIPT_NAME == "$DEBUG" ]]; then
     return 0
   fi
   return 1
@@ -36,17 +36,33 @@ script_directory(){
   echo "$dir"
 }
 
-assert_required_params() {
-  local meshblu_json_path="$1"
+assert_device_type() {
+  local meshblu_json_path device device_type required_device_type
+  meshblu_json_path="$1"
+  required_device_type="$2"
 
-  if [ -n "$meshblu_json_path" ]; then
+  device="$(meshblu-util get "$meshblu_json_path")" || fatal "Could not retrieve device described at '$meshblu_json_path'"
+  device_type="$(echo "$device" | jq --raw-output '.type')" || fatal "Could not parse device JSON returned from meshblu"
+
+  if [ "$device_type" != "$required_device_type" ]; then
+    err_echo "Device described at '$meshblu_json_path' must be '$required_device_type', received: '$device_type'"
+    exit 1
+  fi
+}
+
+assert_required_params() {
+  local customer_meshblu_json_path="$1"
+
+  if [ -n "$customer_meshblu_json_path" ] && [ -f "$customer_meshblu_json_path" ]; then
     return 0
   fi
 
   usage
 
-  if [ -z "$meshblu_json_path" ]; then
+  if [ -z "$customer_meshblu_json_path" ]; then
     echo "Missing </path/to/customer/meshblu.json> argument"
+  elif [ ! -f "$meshblu_json_path" ]; then
+    echo "Could not find a file at '$customer_meshblu_json_path'"
   fi
 
   exit 1
@@ -67,21 +83,26 @@ get_device_type() {
 }
 
 usage(){
-  echo "USAGE: ${SCRIPT_NAME} [/path/to/customer/meshblu.json]"
+  echo "USAGE:"
+  echo "  ${SCRIPT_NAME} [OPTIONS] [/path/to/customer/meshblu.json]"
   echo ''
-  echo 'Description: ...'
+  echo "DESCRIPTION: "
+  echo "  Find all devices enumerated in the customer's \"genisys.devices\""
+  echo '  property. The device meshblu.jsons will each be placed in'
+  echo '  the file: "/path/to/customer/../<name>/meshblu.json"'
   echo ''
-  echo 'Arguments:'
+  echo 'OPTIONS:'
   echo '  -h, --help       print this help text'
   echo '  -v, --version    print the version'
   echo ''
-  echo 'Environment:'
+  echo 'ENVIRONMENT:'
   echo '  DEBUG            print debug output'
   echo ''
 }
 
 version(){
-  local directory="$(script_directory)"
+  local directory
+  directory="$(script_directory)"
 
   if [ -f "$directory/VERSION" ]; then
     cat "$directory/VERSION"
@@ -91,19 +112,21 @@ version(){
 }
 
 find_device() {
-  local name="$1"
-  local genisys_device_name="$2"
-  local meshblu_json_path="./customer/meshblu.json"
+  local genisys_device_name meshblu_json_path name device_dir device_uuid
+  meshblu_json_path="$1"
+  name="$2"
+  genisys_device_name="$3"
+  device_dir="$(dirname "$meshblu_json_path")/../$name"
 
   echo -n "| Updating $name... "
-  local device_uuid="$(find_device_uuid "$genisys_device_name" "$meshblu_json_path")"
+  device_uuid="$(find_device_uuid "$genisys_device_name" "$meshblu_json_path")"
   if [ -z "$device_uuid" ]; then
     echo "failed."
     return 1
   fi
 
-  mkdir -p "$name" \
-  && meshblu-util generate-token --uuid "$device_uuid" "$meshblu_json_path" > "$name/meshblu.json" \
+  mkdir -p "$device_dir" \
+  && meshblu-util generate-token --uuid "$device_uuid" "$meshblu_json_path" > "$device_dir/meshblu.json" \
   && echo "done." \
   || echo "failed."
 }
@@ -117,6 +140,7 @@ find_device_uuid() {
 }
 
 main() {
+  local meshblu_json_path
   # Define args up here
   while [ "$1" != "" ]; do
     local param="$1"
@@ -136,25 +160,31 @@ main() {
           usage
           exit 1
         fi
+        # Set main arguments
+        if [ -z "$meshblu_json_path" ]; then
+          meshblu_json_path="$param"
+        # elif [ -z "$main_arg_2"]; then
+        #   main_arg_2="$param"
+        fi
         ;;
     esac
     shift
   done
+  meshblu_json_path="${meshblu_json_path:-./meshblu.json}"
 
-  if [ ! -f "./customer/meshblu.json" ]; then
-    panic "Error: ./customer/meshblu.json not found"
-  fi
+  assert_required_params "$meshblu_json_path"
+  assert_device_type "$meshblu_json_path" "octoblu:smartspaces:customer"
 
   echo "Finding customer devices... "
-  find_device "slurry-exchange-group" "slurryExchangeGroup"
-  find_device "hue-button-group" "hueButtonGroup"
-  find_device "room-group" "roomGroup"
-  find_device "meeting-group" "meetingGroup"
-  find_device "skype-group" "skypeGroup"
-  find_device "user-group" "userGroup"
-  find_device "user-group-recruiter" "userGroupRecruiter"
-  find_device "endo-genisys-meetings" "meetingGroupEndoMeeting"
-  find_device "room-group-status" "roomGroupStatus"
+  find_device "$meshblu_json_path" "slurry-exchange-group" "slurryExchangeGroup"
+  find_device "$meshblu_json_path" "hue-button-group" "hueButtonGroup"
+  find_device "$meshblu_json_path" "room-group" "roomGroup"
+  find_device "$meshblu_json_path" "meeting-group" "meetingGroup"
+  find_device "$meshblu_json_path" "skype-group" "skypeGroup"
+  find_device "$meshblu_json_path" "user-group" "userGroup"
+  find_device "$meshblu_json_path" "user-group-recruiter" "userGroupRecruiter"
+  find_device "$meshblu_json_path" "endo-genisys-meetings" "meetingGroupEndoMeeting"
+  find_device "$meshblu_json_path" "room-group-status" "roomGroupStatus"
   echo "done."
 }
 
