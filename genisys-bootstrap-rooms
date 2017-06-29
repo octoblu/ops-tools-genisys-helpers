@@ -52,13 +52,19 @@ assert_required_params() {
 }
 
 usage(){
-  echo "USAGE: ${SCRIPT_NAME}"
+  echo "USAGE: "
+  echo "  ${SCRIPT_NAME}"
   echo ''
-  echo 'Description: ...'
+  echo 'DESCRIPTION:'
+  echo '  Will find all the rooms registered to the customer and'
+  echo '  use the factory-service to (re)bootstrap them.'
+  echo '  This script must be run from the customer root (the'
+  echo '  directory that contains the customer and rooms folder)'
   echo ''
   echo 'Arguments:'
   echo '  -h, --help       print this help text'
   echo '  -v, --version    print the version'
+  echo '  -s, --subdomain  the subdomain of the account (ex: dev)'
   echo ''
   echo 'Environment:'
   echo '  DEBUG            print debug output'
