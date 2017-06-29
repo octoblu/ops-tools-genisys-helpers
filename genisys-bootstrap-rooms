@@ -148,7 +148,7 @@ main() {
 
     curl --fail \
       -H 'Content-Type: application/json'\
-      -X PATCH "https://$customerUuid:$customerToken@factory-service.$subdomain.octo.space/v2/spaces/bootstrap/$roomUuid" \
+      -X PUT "https://$customerUuid:$customerToken@factory-service.$subdomain.octo.space/v2/spaces/bootstrap/$roomUuid" \
     && curl --fail \
       -H 'Content-Type: application/json'\
       -X PATCH "https://$customerUuid:$customerToken@factory-service.$subdomain.octo.space/v2/spaces/exchange" \
