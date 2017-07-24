@@ -1,20 +1,74 @@
 #!/bin/bash
 
+set -e -o pipefail
+
 SCRIPT_NAME='genisys-setup-windows-citrix-receiver'
+CACHE_DIR="$(mktemp -d)"
 
 assert_required_params() {
-  local example_arg="$1"
+  local meshblu_json_path room_uuid domain name password storefront_url xd_type username errors
 
-  if [ -n "$example_arg" ]; then
+  meshblu_json_path="$1"
+  room_uuid="$2"
+  domain="$3"
+  name="$4"
+  password="$5"
+  storefront_url="$6"
+  xd_type="$7"
+  username="$8"
+
+  errors=()
+
+  if [ -z "$meshblu_json_path" ]; then
+    errors+=('Missing <path/to/customer/meshblu.json>')
+  elif [ ! -f "$meshblu_json_path" ]; then
+    errors+=("Does not seem to be a file: '$meshblu_json_path'")
+  elif ! get_device "$meshblu_json_path" > /dev/null; then
+    errors+=("Could not retrieve device at: '$meshblu_json_path'")
+  elif [ "$(get_device_type "$meshblu_json_path")" != "octoblu:smartspaces:customer" ]; then
+    errors+=("Device at '$meshblu_json_path' device was not of type 'octoblu:smartspaces:customer', was '$(get_device_type "$meshblu_json_path")'")
+  fi
+
+  if [ -z "$domain" ]; then
+    errors+=('Missing required argument: -d, --domain')
+  fi
+
+  if [ -z "$name" ]; then
+    errors+=('Missing required argument: -n, --name')
+  fi
+
+  if [ -z "$password" ]; then
+    errors+=('Missing required argument: -p, --password')
+  fi
+
+  if [ -z "$room_uuid" ]; then
+    errors+=('Missing required argument: -r, --room-uuid')
+  elif ! get_device "$meshblu_json_path" "$room_uuid" > /dev/null; then
+    errors+=("Could not retrieve room device with uuid: '$room_uuid'")
+  elif [ "$(get_device_type "$meshblu_json_path" "$room_uuid")" != "octoblu:smartspaces:room" ]; then
+    errors+=("Device with uuid '$room_uuid' device was not of type 'octoblu:smartspaces:room', was '$(get_device_type "$meshblu_json_path" "$room_uuid")'")
+  fi
+
+  if [ -z "$storefront_url" ]; then
+    errors+=('Missing required argument: -s, --storefront-url')
+  fi
+
+  if [ -z "$xd_type" ]; then
+    errors+=('Missing required argument: -t, --type')
+  fi
+
+  if [ -z "$username" ]; then
+    errors+=('Missing required argument: -u, --username')
+  fi
+
+  if [ ${#errors[@]} -eq 0 ]; then
     return 0
   fi
 
-  usage
-
-  if [ -z "$example_arg" ]; then
-    echo "Missing example_arg argument"
-  fi
-
+  usage 1>&2
+  for error in "${errors[@]}"; do
+    err_echo "$error"
+  done
   exit 1
 }
 
@@ -63,7 +117,7 @@ script_directory(){
 
 usage(){
   echo 'USAGE: '
-  echo "  ${SCRIPT_NAME} [OPTIONS] <path/to/room/meshblu.json>"
+  echo "  ${SCRIPT_NAME} [OPTIONS] <path/to/customer/meshblu.json>"
   echo ''
   echo 'DESCRIPTION:'
   echo '  Will find the windows-citrix-receiver device and'
@@ -71,11 +125,19 @@ usage(){
   echo '  login to XenDesktop.'
   echo ''
   echo 'OPTIONS:'
-  echo '  -h, --help       print this help text'
-  echo '  -v, --version    print the version'
-  echo '  -d, --domain     windows domain for XenDesktop'
-  echo '  -p, --password   password for XenDesktop'
-  echo '  -u, --username   username for XenDesktop'
+  echo '  -h, --help            print this help text'
+  echo '  -v, --version         print the version'
+  echo '  -d, --domain          windows domain for XenDesktop'
+  echo '                        (default: "CITRITE")'
+  echo '  -n, --name            name of the windows XenDesktop instance '
+  echo '                        (default "Smart Spaces POC - Early Access Customers")'
+  echo '  -p, --password        password for XenDesktop'
+  echo '  -r, --room-uuid       uuid of the room to update'
+  echo '  -s, --storefront-url  url to the XenDesktop storefront'
+  echo '                        (default: "https://alpha.xendesktop.eng.citrite.net/Citrix/ExternalWeb")'
+  echo '  -t, --type            XenDesktop type'
+  echo '                        (default: "Citrix.MPS.Desktop")'
+  echo '  -u, --username        username for XenDesktop'
   echo ''
   echo 'ENVIRONMENT:'
   echo '  DEBUG            print debug output'
@@ -93,10 +155,103 @@ version(){
   fi
 }
 
+get_device() {
+  local cache_filename meshblu_json_path uuid
+  meshblu_json_path="$1"
+  uuid="$2"
+
+  if [ -z "$uuid" ]; then
+    uuid="$(jq --raw-output '.uuid' "$meshblu_json_path")"
+  fi
+
+  cache_filename="$CACHE_DIR/$uuid.json"
+
+  if [ ! -f "$cache_filename" ]; then
+    get_device_nocache "$meshblu_json_path" "$uuid" > "$cache_filename"
+  fi
+
+  cat "$cache_filename"
+}
+
+get_device_nocache() {
+  local meshblu_json_path uuid
+
+  meshblu_json_path="$1"
+  uuid="$2"
+
+  meshblu-util get --uuid "$uuid" "$meshblu_json_path"
+}
+
+get_device_type() {
+  set -e -o pipefail
+
+  local meshblu_json_path uuid
+  meshblu_json_path="$1"
+  uuid="$2"
+
+  get_device "$meshblu_json_path" "$uuid" | jq --raw-output '.type'
+}
+
+get_windows_citrix_receiver_uuid() {
+  local meshblu_json_path room_uuid windows_citrix_receiver_uuid
+  meshblu_json_path="$1"
+  room_uuid="$2"
+
+  windows_citrix_receiver_uuid="$(get_device "$meshblu_json_path" "$room_uuid" | jq --raw-output '.genisys.devices.windowsCitrixReceiver.uuid')" || return 1
+
+  if [ -z "$windows_citrix_receiver_uuid" ] || [ "$windows_citrix_receiver_uuid" == "null" ]; then
+    err_echo "Could not find windowsCitrixReceiver in .genisys.devices: '$(get_device "$meshblu_json_path" "$room_uuid" | jq --raw-output '.genisys.devices')'"
+    return 1
+  fi
+
+  echo -n "$windows_citrix_receiver_uuid"
+}
+
+run() {
+  local meshblu_json_path room_uuid domain name password storefront_url xd_type username
+
+  meshblu_json_path="$1"
+  room_uuid="$2"
+  domain="$3"
+  name="$4"
+  password="$5"
+  storefront_url="$6"
+  xd_type="$7"
+  username="$8"
+
+  windows_citrix_receiver_uuid="$(get_windows_citrix_receiver_uuid "$meshblu_json_path" "$room_uuid")" || return 1
+
+  update_json="$(jq \
+    --null-input \
+    --arg domain "$domain" \
+    --arg name "$name" \
+    --arg xdType "$xd_type" \
+    --arg username "$username" \
+    --arg password "$password" \
+    --arg storefrontUrl "$storefront_url" \
+    '{
+      "$set": {
+        "options": {
+          "domain": $domain,
+          "query": {
+            "name": $name,
+            "type": $xdType
+          },
+          "username": $username,
+          "password": $password,
+          "storeFrontUrl": $storefrontUrl
+        }
+      }
+    }
+  ')" || return 1
+
+  meshblu-util update --uuid "$windows_citrix_receiver_uuid" --put --data "$update_json" "$meshblu_json_path"
+}
+
 main() {
   # Define args up here
   while [ "$1" != "" ]; do
-    local param value
+    local param value meshblu_json_path domain name password storefront_url xd_type username room_uuid
     param="$1"
     # shellcheck disable=2034
     value="$2"
@@ -109,6 +264,34 @@ main() {
       -v | --version)
         version
         exit 0
+        ;;
+      -d | --domain)
+        domain="$value"
+        shift
+        ;;
+      -n | --name)
+        name="$value"
+        shift
+        ;;
+      -p | --password)
+        password="$value"
+        shift
+        ;;
+      -r | --room-uuid)
+        room_uuid="$value"
+        shift
+        ;;
+      -s | --storefront-url)
+        storefront_url="$value"
+        shift
+        ;;
+      -t | --type)
+        xd_type="$value"
+        shift
+        ;;
+      -u | --username)
+        username="$value"
+        shift
         ;;
       # Arg with value
       # -x | --example)
@@ -126,17 +309,23 @@ main() {
           exit 1
         fi
         # Set main arguments
-        # if [ -z "$main_arg" ]; then
-        #   main_arg="$param"
+        if [ -z "$meshblu_json_path" ]; then
+          meshblu_json_path="$param"
         # elif [ -z "$main_arg_2"]; then
         #   main_arg_2="$param"
-        # fi
+        fi
         ;;
     esac
     shift
   done
 
-  # assert_required_params "$example_arg"
+  domain="${domain:-"CITRITE"}"
+  name="${name:-"Smart Spaces POC - Early Access Customers"}"
+  storefront_url="${storefront_url:-"https://alpha.xendesktop.eng.citrite.net/Citrix/ExternalWeb"}"
+  xd_type="${xd_type:-"Citrix.MPS.Desktop"}"
+
+  assert_required_params "$meshblu_json_path" "$room_uuid" "$domain" "$name" "$password" "$storefront_url" "$xd_type" "$username"
+  run "$meshblu_json_path" "$room_uuid" "$domain" "$name" "$password" "$storefront_url" "$xd_type" "$username"
 }
 
 main "$@"
