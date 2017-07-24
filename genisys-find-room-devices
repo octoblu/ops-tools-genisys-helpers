@@ -16,7 +16,7 @@ matches_debug() {
 debug() {
   local cyan='\033[0;36m'
   local no_color='\033[0;0m'
-  local message="$@"
+  local message="$*"
   matches_debug || return 0
   (>&2 echo -e "[${cyan}${SCRIPT_NAME}${no_color}]: $message")
 }
@@ -24,7 +24,7 @@ debug() {
 echo_error_red() {
   local red='\033[0;31m'
   local no_color='\033[0;0m'
-  local message="$@"
+  local message="$*"
 
   (>&2 echo -e "${red}$message${no_color}")
 }
@@ -131,6 +131,15 @@ get_customer_json_path() {
   echo "$(dirname "$room_json_path")/../../customer/meshblu.json"
 }
 
+get_device() {
+  local tmpfile meshblu_json_path uuid
+  meshblu_json_path="$1"
+  uuid="$2"
+  tmpfile="$(mktemp)"
+  meshblu-util get --uuid "$uuid" "$meshblu_json_path" \
+    > "$tmpfile" && cat "$tmpfile"
+}
+
 get_device_type() {
   local device exit_code meshblu_json_path uuid
 
@@ -139,7 +148,7 @@ get_device_type() {
 
   debug "get_device_type: '$meshblu_json_path' '$uuid'"
 
-  device="$(meshblu-util get --uuid "$uuid" "$meshblu_json_path")"
+  device="$(get_device "$meshblu_json_path" "$uuid")"
   exit_code=$?
 
   if [ "$exit_code" != "0" ]; then
@@ -163,7 +172,7 @@ usage(){
   echo '             in the directory: /path/to/room/<device>/meshblu.json'
   echo ''
   echo '             Will currently find endo-exchange, slurry-exchange, hue-button,'
-  echo '             hue-light, powermate, and skype'
+  echo '             hue-light, powermate, skype, and windows-citrix-receiver'
   echo ''
   echo "             NOTE: this script expects the customer's meshblu.json to be"
   echo '             located at /path/to/room/../../customer/meshblu.json'
@@ -211,7 +220,7 @@ find_device_uuid() {
 
   debug "find_device_uuid: '$customer_json_path' '$room_uuid' '$device_key'"
 
-  meshblu-util get --uuid "$room_uuid" "$customer_json_path" \
+  get_device "$customer_json_path" "$room_uuid" \
   | jq --raw-output ".genisys.devices.$device_key.uuid"
 }
 
@@ -273,6 +282,7 @@ main() {
   find_device "$customer_json_path" "$room_json_path" "hueLight" "hue-light" || failed_devices+=("hue-light")
   find_device "$customer_json_path" "$room_json_path" "powermate" "powermate" || failed_devices+=("powermate")
   find_device "$customer_json_path" "$room_json_path" "skype" "skype" || failed_devices+=("skype")
+  find_device "$customer_json_path" "$room_json_path" "windowsCitrixReceiver" "windows-citrix-receiver" || failed_devices+=("windows-citrix-receiver")
 
   if [ "${#failed_devices[@]}" != "0" ]; then
     fatal "Could not generate a meshblu.json for these devices: ${failed_devices[*]}"
