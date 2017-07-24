@@ -9,3 +9,10 @@ For best experience, install using Homebrew on MacOS:
 brew tap octoblu/tools-genisys
 brew install genisys-helpers
 ```
+
+## Dependencies
+
+This project depends on:
+
+* [meshblu-util](https://github.com/octoblu/meshblu-util)
+* [jq](https://stedolan.github.io/jq/)
