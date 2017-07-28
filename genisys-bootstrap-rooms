@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_NAME='genisys-bootstrap-customer'
+SCRIPT_NAME='genisys-bootstrap-rooms'
 
 matches_debug() {
   if [ -z "$DEBUG" ]; then
@@ -135,7 +135,7 @@ main() {
     panic "Error: customer token not found"
   fi
 
-  genisys-find-rooms
+  genisys-find-rooms --skip-room-devices
 
   for room in rooms/*; do
     echo -n "Updating $room... "

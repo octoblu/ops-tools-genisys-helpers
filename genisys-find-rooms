@@ -64,8 +64,9 @@ usage(){
   echo 'Description: ...'
   echo ''
   echo 'Arguments:'
-  echo '  -h, --help       print this help text'
-  echo '  -v, --version    print the version'
+  echo '  -h, --help               print this help text'
+  echo '  -v, --version            print the version'
+  echo '  -s, --skip-room-devices  skip finding room devices'
   echo ''
   echo 'Environment:'
   echo '  DEBUG            print debug output'
@@ -118,17 +119,18 @@ get_rooms() {
 }
 
 find_rooms() {
-  local customer_json_path rooms_path rooms rooms_response
+  local customer_json_path rooms_path rooms rooms_response skip_room_devices
 
   customer_json_path="$1"
   rooms_path="$2"
+  skip_room_devices="$3"
 
   rooms_response="$(get_rooms "$customer_json_path")" || return $?
 
   IFS=$'\n' read -rd '' -a rooms <<<"$rooms_response"
 
   for room in "${rooms[@]}"; do
-    write_room_meshblu_json "$customer_json_path" "$rooms_path" "$room"
+    write_room_meshblu_json "$customer_json_path" "$rooms_path" "$room" "$skip_room_devices"
   done
 }
 
@@ -142,11 +144,12 @@ parse_room_folder_name() {
 }
 
 write_room_meshblu_json() {
-  local customer_json_path rooms_path room room_folder_name room_uuid status
+  local customer_json_path rooms_path room room_folder_name room_uuid skip_room_devices status
 
   customer_json_path="$1"
   rooms_path="$2"
   room="$3"
+  skip_room_devices="$4"
 
   room_folder_name="$(parse_room_folder_name "$room")"
   room_uuid="$(echo -n "$room" | jq --raw-output '.uuid')" || return $?
@@ -163,9 +166,12 @@ write_room_meshblu_json() {
     > "$rooms_path/$room_folder_name/meshblu.json"
     status=$?
   fi
-  pushd "$rooms_path/$room_folder_name"
-  genisys-find-room-devices ./meshblu.json
-  popd
+
+  if [ "$skip_room_devices" == "false" ]; then
+    pushd "$rooms_path/$room_folder_name"
+    genisys-find-room-devices ./meshblu.json
+    popd
+  fi
 
   if [ "$status" == "0" ]; then
     echo "done."
@@ -178,7 +184,9 @@ write_room_meshblu_json() {
 
 main() {
   # Define args up here
-  local customer_json_path rooms_path
+  local customer_json_path rooms_path skip_room_devices
+
+  skip_room_devices='false'
 
   while [ "$1" != "" ]; do
     local param="$1"
@@ -191,6 +199,9 @@ main() {
       -v | --version)
         version
         exit 0
+        ;;
+      -s | --skip-room-devices)
+        skip_room_devices='true'
         ;;
       # Arg with value
       # -x | --example)
@@ -228,7 +239,7 @@ main() {
 
   assert_required_params "$customer_json_path" "$rooms_path"
 
-  find_rooms "$customer_json_path" "$rooms_path"
+  find_rooms "$customer_json_path" "$rooms_path" "$skip_room_devices"
 }
 
 main "$@"
