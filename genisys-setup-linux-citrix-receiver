@@ -130,7 +130,7 @@ usage(){
   echo '  -d, --domain          linux domain for XenDesktop'
   echo '                        (default: "CITRITE")'
   echo '  -n, --name            name of the linux XenDesktop instance '
-  echo '                        (default "Smart Spaces POC - Early Access Customers")'
+  echo '                        (default "Smart Spaces POC - Server 2016")'
   echo '  -p, --password        password for XenDesktop'
   echo '  -r, --room-uuid       uuid of the room to update'
   echo '  -s, --storefront-url  url to the XenDesktop storefront'
@@ -320,7 +320,7 @@ main() {
   done
 
   domain="${domain:-"CITRITE"}"
-  name="${name:-"Smart Spaces POC - Early Access Customers"}"
+  name="${name:-"Smart Spaces POC - Server 2016"}"
   storefront_url="${storefront_url:-"https://alpha.xendesktop.eng.citrite.net/Citrix/ExternalWeb"}"
   xd_type="${xd_type:-"Citrix.MPS.Desktop"}"
 
